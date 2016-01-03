@@ -68,6 +68,7 @@ static ssize_t qpnp_vib_level_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
+<<<<<<< HEAD
 	struct timed_output_dev *tdev = dev_get_drvdata(dev);
 	struct qpnp_vib *vib = container_of(tdev, struct qpnp_vib,
 					 timed_dev);
@@ -91,6 +92,31 @@ static ssize_t qpnp_vib_level_store(struct device *dev,
 	vib->vtg_level = val;
 
 	return strnlen(buf, count);
+=======
+        struct timed_output_dev *tdev = dev_get_drvdata(dev);
+        struct qpnp_vib *vib = container_of(tdev, struct qpnp_vib,
+                                         timed_dev);
+        int val;
+        int rc;
+
+        rc = kstrtoint(buf, 10, &val);
+        if (rc) {
+                pr_err("%s: error getting level\n", __func__);
+                return -EINVAL;
+        }
+
+        if (val < QPNP_VIB_MIN_LEVEL) {
+                pr_err("%s: level %d not in range (%d - %d), using min.", __func__, val, QPNP_VIB_MIN_LEVEL, QPNP_VIB_MAX_LEVEL);
+                val = QPNP_VIB_MIN_LEVEL;
+        } else if (val > QPNP_VIB_MAX_LEVEL) {
+                pr_err("%s: level %d not in range (%d - %d), using max.", __func__, val, QPNP_VIB_MIN_LEVEL, QPNP_VIB_MAX_LEVEL);
+                val = QPNP_VIB_MAX_LEVEL;
+        }
+
+        vib->vtg_level = val;
+
+        return strnlen(buf, count);
+>>>>>>> 3e970bf... mm-6.0 kernel (update security)
 }
 
 static DEVICE_ATTR(vtg_level, S_IRUGO | S_IWUSR, qpnp_vib_level_show, qpnp_vib_level_store);

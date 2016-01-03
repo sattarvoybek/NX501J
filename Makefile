@@ -575,6 +575,13 @@ else
 KBUILD_CFLAGS	+= -O2
 endif
 
+<<<<<<< HEAD
+=======
+#KBUILD_CFLAGS	+= -ffast-math -ftree-vectorize -funsafe-math-optimizations -fno-delete-null-pointer-checks
+
+#KBUILD_CFLAGS	+=  $(call cc-disable-warning,maybe-uninitialized)
+
+>>>>>>> 3e970bf... mm-6.0 kernel (update security)
 include $(srctree)/arch/$(SRCARCH)/Makefile
 
 ifneq ($(CONFIG_FRAME_WARN),0)
@@ -1148,6 +1155,12 @@ _modinst_post: _modinst_
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.fwinst obj=firmware __fw_modinst
 	$(call cmd,depmod)
 
+<<<<<<< HEAD
+=======
+
+
+
+>>>>>>> 3e970bf... mm-6.0 kernel (update security)
 else # CONFIG_MODULES
 
 # Modules not configured
