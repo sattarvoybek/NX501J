@@ -321,11 +321,7 @@ static int asix_rx_fixup(struct usbnet *dev, struct sk_buff *skb)
 			return 0;
 		}
 
-<<<<<<< HEAD
 		if ((size > dev->net->mtu + ETH_HLEN) ||
-=======
-		if ((size > dev->net->mtu + ETH_HLEN + VLAN_HLEN) ||
->>>>>>> 3e970bf... mm-6.0 kernel (update security)
 		    (size + offset > skb->len)) {
 			netdev_err(dev->net, "asix_rx_fixup() Bad RX Length %d\n",
 				   size);

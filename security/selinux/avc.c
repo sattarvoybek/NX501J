@@ -22,11 +22,8 @@
 #include <linux/init.h>
 #include <linux/skbuff.h>
 #include <linux/percpu.h>
-<<<<<<< HEAD
-=======
 #include <linux/moduleparam.h>
 #include <linux/list.h>
->>>>>>> 3e970bf... mm-6.0 kernel (update security)
 #include <net/sock.h>
 #include <linux/un.h>
 #include <net/af_unix.h>

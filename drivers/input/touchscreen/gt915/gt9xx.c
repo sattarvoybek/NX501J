@@ -925,8 +925,12 @@ static void goodix_ts_work_func(struct work_struct *work)
 				
 				
 //                doze_status = DOZE_WAKEUP;
+<<<<<<< HEAD
 #if 1			//add by luochangyang 2014/04/30
 >>>>>>> 3e970bf... mm-6.0 kernel (update security)
+=======
+#if 0			//add by luochangyang 2014/04/30
+>>>>>>> 0edd8e7... add missing files
 				input_report_key(ts->input_dev, KEY_F10, 1);
 				input_sync(ts->input_dev);
 
