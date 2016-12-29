@@ -4613,11 +4613,7 @@ void cgroup_post_fork(struct task_struct *child)
 			 * init_css_set.
 			 */
 			list_add(&child->cg_list, &child->cgroups->tasks);
-<<<<<<< HEAD
 		}
-=======
-		task_unlock(child);
->>>>>>> 3e970bf... mm-6.0 kernel (update security)
 		write_unlock(&css_set_lock);
 	}
 }
