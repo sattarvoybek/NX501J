@@ -793,6 +793,7 @@ static void goodix_ts_work_func(struct work_struct *work)
 				
 				gtp_i2c_read(i2c_connect_client, gesture_data, 6);
 				
+<<<<<<< HEAD
 				if (((gesture_data[2] == 1) || (gesture_data[2] == 2) || (gesture_data[2] == 4)) &&
 					((gesture_data[3] == 0) && (gesture_data[4] == 0) && (gesture_data[5] == 0))) {
 					GTP_INFO("Double click by key report ignore light up the screen!");
@@ -805,6 +806,16 @@ static void goodix_ts_work_func(struct work_struct *work)
 	
 					input_report_key(ts->input_dev, KEY_F10, 0);
 					input_sync(ts->input_dev);
+=======
+//                doze_status = DOZE_WAKEUP;
+#if 1			//add by luochangyang 2014/04/30
+>>>>>>> 3e970bf... mm-6.0 kernel (update security)
+				input_report_key(ts->input_dev, KEY_F10, 1);
+				input_sync(ts->input_dev);
+
+				input_report_key(ts->input_dev, KEY_F10, 0);
+				input_sync(ts->input_dev);
+>>>>>>> parent of a62c1d4... add missing files
 #else
 					input_report_key(ts->input_dev, KEY_POWER, 1);
 					input_sync(ts->input_dev);
