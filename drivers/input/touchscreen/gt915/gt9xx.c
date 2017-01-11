@@ -108,11 +108,6 @@ static const struct file_operations config_proc_ops = {
 /*ZTEMT Added by luochangyang, 2014/01/08*/
 #define VCC_I2C
 
-<<<<<<< HEAD
-=======
-#define DT2W_PWRKEY_DUR		60
-
->>>>>>> parent of dfb5ba5... mm-6.0 kernel (update security)
 #if defined(CONFIG_FB)
 static int fb_notifier_callback(struct notifier_block *self,
 				 unsigned long event, void *data);
@@ -726,12 +721,7 @@ static void goodix_ts_work_func(struct work_struct *work)
 
 #if GTP_GESTURE_WAKEUP
     u8 doze_buf[3] = {0x81, 0x4B};
-<<<<<<< HEAD
 	u8 gesture_data[6] = {0x81, 0x4D};
-=======
-    u8 gesture_data[6] = {0x81, 0x4D};
-    u8 key_code = KEY_POWER;
->>>>>>> parent of dfb5ba5... mm-6.0 kernel (update security)
 #endif
 
     GTP_DEBUG_FUNC();
@@ -796,7 +786,6 @@ static void goodix_ts_work_func(struct work_struct *work)
                 doze_buf[2] = 0x00;
                 gtp_i2c_write(i2c_connect_client, doze_buf, 3);
             }
-<<<<<<< HEAD
 #endif
 
 			if (0xCC == doze_buf[2]) {
@@ -804,7 +793,6 @@ static void goodix_ts_work_func(struct work_struct *work)
 				
 				gtp_i2c_read(i2c_connect_client, gesture_data, 6);
 				
-<<<<<<< HEAD
 				if (((gesture_data[2] == 1) || (gesture_data[2] == 2) || (gesture_data[2] == 4)) &&
 					((gesture_data[3] == 0) && (gesture_data[4] == 0) && (gesture_data[5] == 0))) {
 					GTP_INFO("Double click by key report ignore light up the screen!");
@@ -817,70 +805,13 @@ static void goodix_ts_work_func(struct work_struct *work)
 	
 					input_report_key(ts->input_dev, KEY_F10, 0);
 					input_sync(ts->input_dev);
-=======
-//                doze_status = DOZE_WAKEUP;
-#if 1			//add by luochangyang 2014/04/30
->>>>>>> 3e970bf... mm-6.0 kernel (update security)
-=======
-            else if (0xCC == doze_buf[2])
-            {
-                GTP_INFO("Double click to light up the screen!");
-
-                gtp_i2c_read(i2c_connect_client, gesture_data, 6);
-#if 0
-                GTP_INFO("gesture_data[2] = %d", gesture_data[2]);
-                GTP_INFO("gesture_data[3] = %d", gesture_data[3]);
-                GTP_INFO("gesture_data[4] = %d", gesture_data[4]);
-                GTP_INFO("gesture_data[5] = %d", gesture_data[5]);
-#endif
-                if ((gesture_data[3] == 0) && (gesture_data[4] == 0) && (gesture_data[5] == 0)) {
-                    if(gesture_data[2] == 1)
-                        key_code = KEY_DT2W_LEFT;
-                    else if(gesture_data[2] == 2)
-                        key_code = KEY_DT2W_MIDDLE;
-                    else if(gesture_data[2] == 4)
-                        key_code = KEY_DT2W_RIGHT;
-                    GTP_INFO("Double click by key!");
-                } else {
-                    key_code = KEY_DT2W_SCREEN;
-                    GTP_INFO("Double click by display area!");
-                }
-
-                doze_status = DOZE_WAKEUP;
-#if 0
->>>>>>> parent of dfb5ba5... mm-6.0 kernel (update security)
-				input_report_key(ts->input_dev, KEY_F10, 1);
-				input_sync(ts->input_dev);
-
-				input_report_key(ts->input_dev, KEY_F10, 0);
-				input_sync(ts->input_dev);
->>>>>>> parent of a62c1d4... add missing files
 #else
-<<<<<<< HEAD
 					input_report_key(ts->input_dev, KEY_POWER, 1);
 					input_sync(ts->input_dev);
 					input_report_key(ts->input_dev, KEY_POWER, 0);
 					input_sync(ts->input_dev);
 #endif
 				}
-=======
-                input_report_key(ts->input_dev, key_code, 1);
-                input_sync(ts->input_dev);
-		msleep(DT2W_PWRKEY_DUR);
-                input_report_key(ts->input_dev, key_code, 0);
-                input_sync(ts->input_dev);
-#endif				
-                // clear 0x814B
-                doze_buf[2] = 0x00;
-                gtp_i2c_write(i2c_connect_client, doze_buf, 3);
-            }
-            else
-            {
-                // clear 0x814B
-                doze_buf[2] = 0x00;
-                gtp_i2c_write(i2c_connect_client, doze_buf, 3);
-                gtp_enter_doze(ts);
->>>>>>> parent of dfb5ba5... mm-6.0 kernel (update security)
             }
 
 			// clear 0x814B

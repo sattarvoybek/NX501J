@@ -1211,14 +1211,14 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 #else
 			/* For large area event */
 			input_mt_slot(rmi4_data->input_dev, 0);
-            input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, true);
-            input_report_abs(rmi4_data->input_dev, ABS_MT_PRESSURE, 1000);
-            input_sync(rmi4_data->input_dev);
+            		input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, true);
+            		input_report_abs(rmi4_data->input_dev, ABS_MT_PRESSURE, 1000);
+            		input_sync(rmi4_data->input_dev);
 
-            /* Release all finger */
-        	for (fingers = 0; fingers < 10; fingers++) {
-        		input_mt_slot(rmi4_data->input_dev, fingers);
-        		input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, false);
+            		/* Release all finger */
+       			for (fingers = 0; fingers < 10; fingers++) {
+       				input_mt_slot(rmi4_data->input_dev, fingers);
+        			input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, false);
         	}
             input_sync(rmi4_data->input_dev);
 #endif
@@ -1275,10 +1275,12 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 			input_report_key(rmi4_data->input_dev, KEY_POWER, 0);
 			input_sync(rmi4_data->input_dev);
 #else
-			input_report_key(rmi4_data->input_dev, KEY_F10, 1);
+			//input_report_key(rmi4_data->input_dev, KEY_F10, 1);
+			input_report_key(rmi4_data->input_dev, KEY_POWER, 1);
 			input_sync(rmi4_data->input_dev);
 
-			input_report_key(rmi4_data->input_dev, KEY_F10, 0);
+			//input_report_key(rmi4_data->input_dev, KEY_F10, 0);
+			input_report_key(rmi4_data->input_dev, KEY_POWER, 0);
 			input_sync(rmi4_data->input_dev);
 #endif
 
@@ -3332,9 +3334,9 @@ static int synaptics_rmi4_ztemt_wake(struct synaptics_rmi4_data *rmi4_data)
 	if (rmi4_data->sensor_sleep == true) {
 		synaptics_rmi4_sensor_wake(rmi4_data);
 	    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-	    if (!(rmi4_data->wakeup_gesture)) {
+	    //if (!(rmi4_data->wakeup_gesture)) {
 			synaptics_rmi4_irq_enable(rmi4_data, true);
-	    }
+	    //}
 	    /***ZTEMT END***/
 		retval = synaptics_rmi4_reinit_device(rmi4_data);
 		if (retval < 0) {
@@ -3381,7 +3383,7 @@ static int synaptics_rmi4_fb_notifier_callback(struct notifier_block *self,
 		container_of(self, struct synaptics_rmi4_data, fb_notif);
 
 	if (evdata && evdata->data && rmi4_data && 
-        rmi4_data->input_dev && (event == FB_EVENT_BLANK)) {
+        rmi4_data->input_dev && event == FB_EVENT_BLANK) {
 
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK) {

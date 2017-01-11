@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export ARCH=arm
-export CROSS_COMPILE="/home/sattarvoybek/dev/kernel/arm/arm-eabi-4.8/bin/arm-eabi-"
+export CROSS_COMPILE="/home/sattarvoybek/kernel/arm-eabi-4.8/bin/arm-eabi-"
 
 make msm8926-nx404h_defconfig
 make -j16
