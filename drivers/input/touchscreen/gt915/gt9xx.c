@@ -80,11 +80,12 @@ u8 config[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
 /*ZTEMT END*/
 
 #if GTP_HAVE_TOUCH_KEY
-    static const u16 touch_key_array[] = GTP_KEY_TAB;
+    static int touch_keys_enabled = 1;
+    static u16 touch_key_array[] = GTP_KEY_TAB;
     #define GTP_MAX_KEY_NUM  (sizeof(touch_key_array)/sizeof(touch_key_array[0]))
     
 #if GTP_DEBUG_ON
-    static const int  key_codes[] = {KEY_MENU, KEY_HOME, KEY_BACK};
+    static int key_codes[] = {KEY_MENU, KEY_HOMEPAGE, KEY_BACK};
     static const char *key_names[] = {"Key_Menu", "Key_Home", "Key_Back"};
 #endif
     
@@ -107,6 +108,8 @@ static const struct file_operations config_proc_ops = {
 
 /*ZTEMT Added by luochangyang, 2014/01/08*/
 #define VCC_I2C
+
+#define DT2W_PWRKEY_DUR		60
 
 #if defined(CONFIG_FB)
 static int fb_notifier_callback(struct notifier_block *self,
@@ -163,6 +166,7 @@ typedef enum
     DOZE_DISABLED = 0,
     DOZE_ENABLED = 1,
     DOZE_WAKEUP = 2,
+    DOZE_DISABLING = 3,
 }DOZE_T;
 static DOZE_T doze_status = DOZE_DISABLED;
 static s8 gtp_enter_doze(struct goodix_ts_data *ts);
@@ -219,7 +223,7 @@ s32 gtp_i2c_read(struct i2c_client *client, u8 *buf, s32 len)
     #if GTP_GESTURE_WAKEUP
 	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
         // reset chip would quit doze mode
-        if (DOZE_ENABLED == doze_status)
+        if (DOZE_ENABLED == doze_status || DOZE_WAKEUP == doze_status)
         {
             return ret;
         }
@@ -284,7 +288,7 @@ s32 gtp_i2c_write(struct i2c_client *client,u8 *buf,s32 len)
     
     #if GTP_GESTURE_WAKEUP
 	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
-        if (DOZE_ENABLED == doze_status)
+        if (DOZE_ENABLED == doze_status || DOZE_WAKEUP == doze_status)
         {
             return ret;
         }
@@ -456,20 +460,11 @@ static void gtp_touch_down(struct goodix_ts_data* ts,s32 id,s32 x,s32 y,s32 w)
 
 #if GTP_ICS_SLOT_REPORT
     input_mt_slot(ts->input_dev, id);
-	input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
-	
-//    input_report_abs(ts->input_dev, ABS_MT_TRACKING_ID, id);
+    input_report_abs(ts->input_dev, ABS_MT_TRACKING_ID, id);
     input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x);
     input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y);
     input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, w);
-	/*luochangyang for Palm Sleep 2014/06/10*/
-	#if 1
-	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, w);
-	input_report_abs(ts->input_dev, ABS_MT_PRESSURE, w);
-	#else
     input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, w);
-	#endif
-	/*luochangyang END*/
 #else
     input_report_key(ts->input_dev, BTN_TOUCH, 1);
     input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x);
@@ -479,7 +474,6 @@ static void gtp_touch_down(struct goodix_ts_data* ts,s32 id,s32 x,s32 y,s32 w)
     input_report_abs(ts->input_dev, ABS_MT_TRACKING_ID, id);
     input_mt_sync(ts->input_dev);
 #endif
-	
 
     GTP_DEBUG("ID:%d, X:%d, Y:%d, W:%d", id, x, y, w);
 }
@@ -673,10 +667,10 @@ static ssize_t ztemt_wakeup_gesture_store(struct device *dev,
 	if (value > 0xFF && value < 0)
 		return -EINVAL;
 
-	if (value == 0xFF)
-		value = 0;
-
 	ts->wakeup_gesture = (u8)value;
+
+//	if(ts->wakeup_gesture == 1 && ts->gtp_is_suspend == 1 &&  DOZE_DISABLED == doze_status)
+//		gtp_enter_doze(ts);
 
 	return size;
 }
@@ -684,6 +678,111 @@ static ssize_t ztemt_wakeup_gesture_store(struct device *dev,
 static DEVICE_ATTR(wakeup_gesture, 0664, ztemt_wakeup_gesture_show, ztemt_wakeup_gesture_store);
 /*luochangyang END*/
 
+static ssize_t ztemt_palm2sleep_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
+	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+	ssize_t ret;
+	
+	ret = sprintf(buf, "0x%02X\n", ts->palm2sleep);
+
+	return ret;
+}
+
+static ssize_t ztemt_palm2sleep_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
+	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+	unsigned long value;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &value);
+	if (ret < 0)
+		return ret;
+
+	if (value > 1 || value < 0)
+		return -EINVAL;
+
+	ts->palm2sleep = (u8)value;
+
+	return size;
+}
+
+static DEVICE_ATTR(palm2sleep, 0664, ztemt_palm2sleep_show, ztemt_palm2sleep_store);
+
+static ssize_t touch_key_array_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+
+	if (GTP_MAX_KEY_NUM != 3)
+		return -EINVAL;
+
+	ret = sprintf(buf, "%hu %hu %hu\n", touch_key_array[0], touch_key_array[1], touch_key_array[2]);
+
+	return ret;
+}
+
+static ssize_t touch_key_array_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
+	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+	ssize_t ret;
+	int index;
+	u16 touch_key_array_tmp[] = GTP_KEY_TAB;
+
+	if (GTP_MAX_KEY_NUM != 3)
+		return -EINVAL;
+
+	ret = sscanf(buf, "%hu %hu %hu", &touch_key_array_tmp[0], &touch_key_array_tmp[1], &touch_key_array_tmp[2]);
+
+	for (index = 0; index < GTP_MAX_KEY_NUM; index++)
+	{
+		input_set_capability(ts->input_dev, EV_KEY, touch_key_array_tmp[index]);
+		touch_key_array[index] = touch_key_array_tmp[index];
+#if GTP_DEBUG_ON
+		key_codes[index] = touch_key_array_tmp[index];
+#endif
+	}
+
+	return size;
+}
+
+static DEVICE_ATTR(touch_key_array, 0664, touch_key_array_show, touch_key_array_store);
+
+
+static ssize_t keys_enabled_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+
+	ret = sprintf(buf, "%d\n", touch_keys_enabled);
+
+	return ret;
+}
+
+static ssize_t keys_enabled_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned long value;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &value);
+	if (ret < 0)
+		return ret;
+
+	if (value < 0 || value > 1)
+		return -EINVAL;
+
+	touch_keys_enabled = (int)value;
+
+	return size;
+}
+
+static DEVICE_ATTR(keys_enabled, 0664, keys_enabled_show, keys_enabled_store);
 
 /*******************************************************
 Function:
@@ -721,12 +820,13 @@ static void goodix_ts_work_func(struct work_struct *work)
 
 #if GTP_GESTURE_WAKEUP
     u8 doze_buf[3] = {0x81, 0x4B};
-	u8 gesture_data[6] = {0x81, 0x4D};
+    u8 gesture_data[6] = {0x81, 0x4D};
+    u8 key_code = KEY_POWER;
 #endif
 
     GTP_DEBUG_FUNC();
     ts = container_of(work, struct goodix_ts_data, work);
-    if (ts->enter_update || ts->wakeup_gesture_flag == 1)
+    if (ts->enter_update)
     {
         return;
     }
@@ -738,13 +838,12 @@ static void goodix_ts_work_func(struct work_struct *work)
 /*ZTEMT END*/
 
 #if GTP_GESTURE_WAKEUP
-    if (ts->wakeup_gesture == 1 && DOZE_ENABLED == doze_status)	//add by luochangyang 2014/04/30
+    if (ts->wakeup_gesture == 1 && (DOZE_ENABLED == doze_status || DOZE_WAKEUP == doze_status))	//add by luochangyang 2014/04/30
     {               
         ret = gtp_i2c_read(i2c_connect_client, doze_buf, 3);
         GTP_DEBUG("0x814B = 0x%02X", doze_buf[2]);
         if (ret > 0)
-        {
-#if 0
+        {     
             if ((doze_buf[2] == 'a') || (doze_buf[2] == 'b') || (doze_buf[2] == 'c') ||
                 (doze_buf[2] == 'd') || (doze_buf[2] == 'e') || (doze_buf[2] == 'g') || 
                 (doze_buf[2] == 'h') || (doze_buf[2] == 'm') || (doze_buf[2] == 'o') ||
@@ -769,9 +868,8 @@ static void goodix_ts_work_func(struct work_struct *work)
                 // clear 0x814B
                 doze_buf[2] = 0x00;
                 gtp_i2c_write(i2c_connect_client, doze_buf, 3);
-			}
-			else if ( (doze_buf[2] == 0xAA) || (doze_buf[2] == 0xBB) ||
-				(doze_buf[2] == 0xAB) || (doze_buf[2] == 0xBA) )
+	    } else if ( (doze_buf[2] == 0xAA) || (doze_buf[2] == 0xBB) ||
+			(doze_buf[2] == 0xAB) || (doze_buf[2] == 0xBA) )
             {
                 char *direction[4] = {"Right", "Down", "Up", "Left"};
                 u8 type = ((doze_buf[2] & 0x0F) - 0x0A) + (((doze_buf[2] >> 4) & 0x0F) - 0x0A) * 2;
@@ -786,38 +884,55 @@ static void goodix_ts_work_func(struct work_struct *work)
                 doze_buf[2] = 0x00;
                 gtp_i2c_write(i2c_connect_client, doze_buf, 3);
             }
-#endif
-
-			if (0xCC == doze_buf[2]) {
+            else if (0xCC == doze_buf[2])
+            {
                 GTP_INFO("Double click to light up the screen!");
-				
-				gtp_i2c_read(i2c_connect_client, gesture_data, 6);
-				
-				if (((gesture_data[2] == 1) || (gesture_data[2] == 2) || (gesture_data[2] == 4)) &&
-					((gesture_data[3] == 0) && (gesture_data[4] == 0) && (gesture_data[5] == 0))) {
-					GTP_INFO("Double click by key report ignore light up the screen!");
-				} else {
-					GTP_INFO("Double click AA area to light up the screen!");
-					doze_status = DOZE_WAKEUP;
-#if 1			//add by luochangyang 2014/04/30
-					input_report_key(ts->input_dev, KEY_F10, 1);
-					input_sync(ts->input_dev);
-	
-					input_report_key(ts->input_dev, KEY_F10, 0);
-					input_sync(ts->input_dev);
-#else
-					input_report_key(ts->input_dev, KEY_POWER, 1);
-					input_sync(ts->input_dev);
-					input_report_key(ts->input_dev, KEY_POWER, 0);
-					input_sync(ts->input_dev);
-#endif
-				}
-            }
 
-			// clear 0x814B
-			doze_buf[2] = 0x00;
-			gtp_i2c_write(i2c_connect_client, doze_buf, 3);
-			gtp_enter_doze(ts);
+                gtp_i2c_read(i2c_connect_client, gesture_data, 6);
+#if 0
+                GTP_INFO("gesture_data[2] = %d", gesture_data[2]);
+                GTP_INFO("gesture_data[3] = %d", gesture_data[3]);
+                GTP_INFO("gesture_data[4] = %d", gesture_data[4]);
+                GTP_INFO("gesture_data[5] = %d", gesture_data[5]);
+#endif
+                if ((gesture_data[3] == 0) && (gesture_data[4] == 0) && (gesture_data[5] == 0)) {
+                    if(gesture_data[2] == 1)
+                        key_code = KEY_DT2W_LEFT;
+                    else if(gesture_data[2] == 2)
+                        key_code = KEY_DT2W_MIDDLE;
+                    else if(gesture_data[2] == 4)
+                        key_code = KEY_DT2W_RIGHT;
+                    GTP_INFO("Double click by key!");
+                } else {
+                    key_code = KEY_DT2W_SCREEN;
+                    GTP_INFO("Double click by display area!");
+                }
+
+                doze_status = DOZE_WAKEUP;
+#if 0
+				input_report_key(ts->input_dev, KEY_F10, 1);
+				input_sync(ts->input_dev);
+
+				input_report_key(ts->input_dev, KEY_F10, 0);
+				input_sync(ts->input_dev);
+#else
+                input_report_key(ts->input_dev, key_code, 1);
+                input_sync(ts->input_dev);
+		msleep(DT2W_PWRKEY_DUR);
+                input_report_key(ts->input_dev, key_code, 0);
+                input_sync(ts->input_dev);
+#endif				
+                // clear 0x814B
+                doze_buf[2] = 0x00;
+                gtp_i2c_write(i2c_connect_client, doze_buf, 3);
+            }
+            else
+            {
+                // clear 0x814B
+                doze_buf[2] = 0x00;
+                gtp_i2c_write(i2c_connect_client, doze_buf, 3);
+                gtp_enter_doze(ts);
+            }
         }
         if (ts->use_irq)
         {
@@ -933,29 +1048,31 @@ static void goodix_ts_work_func(struct work_struct *work)
     /*ZTEMT Added by luochangyang, For palm to sleep 2014/02/19*/
     if (finger & 0x40)      //0x814E bit6
     {
-        /* For large area event */   
-
-		GTP_INFO("Have palm event.\n");
-
-		/* For large area event */
-		input_mt_slot(ts->input_dev, 0);
-
-		input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
-		input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 1000);
-		input_sync(ts->input_dev);
-		
-		/* Release all finger */
-		for (pre_touch = 0; pre_touch < GTP_MAX_TOUCH; pre_touch++) {
-			input_mt_slot(ts->input_dev, pre_touch);
-			input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, false);
-		}
-		input_sync(ts->input_dev);
-		
+        /* For large area event */
+        GTP_INFO("Have palm event.\n");
 #if 0
-        /* Release all finger */
+		//report palm event
+		input_report_key(ts->input_dev, BTN_TOUCH, 1);
+		input_report_abs(ts->input_dev, ABS_MT_PRESSURE,300);
+		input_mt_sync(ts->input_dev);
+		input_sync(ts->input_dev);
+
+		input_report_key(ts->input_dev, BTN_TOUCH, 0);
+		input_sync(ts->input_dev);
+#else
+	if(ts->palm2sleep > 0) {
+		input_report_key(ts->input_dev, KEY_PALM, 1);
+		input_sync(ts->input_dev);
+		
+		input_report_key(ts->input_dev, KEY_PALM, 0);
+		input_sync(ts->input_dev);
+	}
+#endif
+
+        //release finger
         if(pre_touch)
             gtp_touch_up(ts, 0);
-#endif
+
         pre_touch = 0;
         pre_key = 0;
 
@@ -1024,7 +1141,7 @@ static void goodix_ts_work_func(struct work_struct *work)
     #endif
     
     #if GTP_HAVE_TOUCH_KEY
-        if (!pre_touch)
+        if (!pre_touch && touch_keys_enabled)
         {
             for (i = 0; i < GTP_MAX_KEY_NUM; i++)
             {
@@ -1295,7 +1412,7 @@ void gtp_reset_guitar(struct i2c_client *client, s32 ms)
     }
 #endif
 
-    gtp_int_sync(25);
+    gtp_int_sync(50);  
 #if GTP_ESD_PROTECT
     gtp_init_ext_watchdog(client);
 #endif
@@ -1335,7 +1452,7 @@ static s8 gtp_enter_doze(struct goodix_ts_data *ts)
         if (ret > 0)
         {
             doze_status = DOZE_ENABLED;
-            GTP_DEBUG("Gesture mode enabled.");
+            GTP_INFO("Gesture mode enabled.");
             return ret;
         }
         msleep(10);
@@ -1418,6 +1535,8 @@ static s8 gtp_wakeup_sleep(struct goodix_ts_data * ts)
     u8 retry = 0;
     s8 ret = -1;
     
+    DOZE_T old_doze_status = doze_status;
+    
     GTP_DEBUG_FUNC();
 
 #if GTP_COMPATIBLE_MODE
@@ -1484,40 +1603,36 @@ static s8 gtp_wakeup_sleep(struct goodix_ts_data * ts)
 #else
     while(retry++ < 10)
     {
-    #if GTP_GESTURE_WAKEUP
-	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
-        if (DOZE_WAKEUP != doze_status)  
-        {
-            GTP_DEBUG("Powerkey wakeup.");
-        }
-        else
-        {
-            GTP_DEBUG("Gesture wakeup.");
-        }
-        doze_status = DOZE_DISABLED;
-		if (ts->enter_update == 0) {	//if not do this, FW update would fail	add by luochangyang 2014/04/30
-	        gtp_irq_disable(ts);
-			ts->wakeup_gesture_flag = 1;
-			
-	        gtp_reset_guitar(ts->client, 10);
-			
-	        gtp_irq_enable(ts);
-			ts->wakeup_gesture_flag = 0;
+#if GTP_GESTURE_WAKEUP
+	if(DOZE_DISABLED != old_doze_status) {
+		if (DOZE_WAKEUP != old_doze_status)  
+		{
+			GTP_INFO("Powerkey wakeup.");
+		}
+		else   
+		{
+			GTP_INFO("Gesture wakeup.");
+		}
+		doze_status = DOZE_DISABLED;
+		if (ts->enter_update == 0) {	//if not this, FW update would fail	add by luochangyang 2014/04/30
+			gtp_irq_disable(ts);
+			gtp_reset_guitar(ts->client, 10);
+			gtp_irq_enable(ts);
 		}
 	} else {
-    //#else
-        GTP_GPIO_OUTPUT(GTP_INT_PORT, 1);
-        msleep(5);
+		GTP_GPIO_OUTPUT(GTP_INT_PORT, 1);
+		msleep(5);
 	}
-    #endif
+#endif
     
         ret = gtp_i2c_test(ts->client);
         if (ret > 0)
         {
-            GTP_DEBUG("GTP wakeup sleep.");
+            GTP_INFO("GTP wakeup sleep.");
             
         //#if (!GTP_GESTURE_WAKEUP)
-		if (ts->wakeup_gesture == 0) {	//add by luochangyang 2014/04/30
+//		if (ts->wakeup_gesture == 0) {	//add by luochangyang 2014/04/30
+	    if(DOZE_DISABLED == old_doze_status) {
             {
                 gtp_int_sync(25);
             #if GTP_ESD_PROTECT
@@ -2021,11 +2136,11 @@ static s8 gtp_request_irq(struct goodix_ts_data *ts)
     GTP_DEBUG_FUNC();
     GTP_DEBUG("INT trigger type:%x", ts->int_trigger_type);
 
-	ret  = request_threaded_irq(ts->client->irq, NULL,
-	               goodix_ts_irq_handler,
-	               irq_table[ts->int_trigger_type],
-	               ts->client->name,
-	               ts);
+    ret  = request_irq(ts->client->irq, 
+                       goodix_ts_irq_handler,
+                       irq_table[ts->int_trigger_type],
+                       ts->client->name,
+                       ts);
     if (ret)
     {
         GTP_ERROR("Request IRQ failed!ERRNO:%d.", ret);
@@ -2039,7 +2154,7 @@ static s8 gtp_request_irq(struct goodix_ts_data *ts)
     }
     else 
     {
-//        gtp_irq_disable(ts);
+        gtp_irq_disable(ts);
         ts->use_irq = 1;
         return 0;
     }
@@ -2090,19 +2205,23 @@ static s8 gtp_request_input_dev(struct goodix_ts_data *ts)
 
 #if GTP_GESTURE_WAKEUP
     input_set_capability(ts->input_dev, EV_KEY, KEY_POWER);
+    input_set_capability(ts->input_dev, EV_KEY, KEY_DT2W_SCREEN);
+    input_set_capability(ts->input_dev, EV_KEY, KEY_DT2W_LEFT);
+    input_set_capability(ts->input_dev, EV_KEY, KEY_DT2W_MIDDLE);
+    input_set_capability(ts->input_dev, EV_KEY, KEY_DT2W_RIGHT);
 #endif 
+
+    input_set_capability(ts->input_dev, EV_KEY, KEY_PALM);
 
 #if GTP_CHANGE_X2Y
     GTP_SWAP(ts->abs_x_max, ts->abs_y_max);
 #endif
 
-	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->abs_x_max, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->abs_y_max, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_PRESSURE, 0, 255, 0, 0);//Added by luochangyang, 2014/02/19
-//	input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MINOR, 0, 255, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_TRACKING_ID, 0, 255, 0, 0);
+    input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->abs_x_max, 0, 0);
+    input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->abs_y_max, 0, 0);
+    input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
+    input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
+    input_set_abs_params(ts->input_dev, ABS_MT_TRACKING_ID, 0, 255, 0, 0);
 
     sprintf(phys, "input/ts");
     ts->input_dev->name = goodix_ts_name;
@@ -2853,6 +2972,22 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
     {
         gtp_irq_enable(ts);
     }
+
+    ret = device_create_file(&(client->dev), &dev_attr_touch_key_array);
+    if (ret) {
+        dev_err(&(client->dev), "%s: Error, could not create touch_key_array", __func__);
+    }
+
+    ret = device_create_file(&(client->dev), &dev_attr_keys_enabled);
+    if (ret) {
+        dev_err(&(client->dev), "%s: Error, could not create keys_enabled", __func__);
+    }
+    
+    ret = device_create_file(&(client->dev), &dev_attr_palm2sleep);
+    if (ret) {
+        dev_err(&(client->dev), "%s: Error, could not create palm2sleep", __func__);
+    }
+    ts->palm2sleep = 1;
     
 	/*luochangyang For wakeup gesture 2014/04/29*/
 	ret = device_create_file(&(client->dev), &dev_attr_wakeup_gesture);
@@ -2860,7 +2995,7 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		dev_err(&(client->dev), "%s: Error, could not create wakeup_gesture", __func__);
 	}
 	/*Default enable or disable*/
-#if 0
+#if 1
 	ts->wakeup_gesture = 1;
 #else
 	ts->wakeup_gesture = 0;
@@ -2954,7 +3089,7 @@ static void goodix_ts_suspend(struct goodix_ts_data *ts)
     
     GTP_DEBUG_FUNC();
     
-    GTP_DEBUG("System suspend.");
+    GTP_INFO("System suspend.");
 
 	if(ts->enter_update)
 	{
@@ -2976,7 +3111,6 @@ static void goodix_ts_suspend(struct goodix_ts_data *ts)
 #if GTP_GESTURE_WAKEUP
 	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
 		ret = gtp_enter_doze(ts);
-		GTP_INFO("Gesture mode enabled.");
 	//#else
 	} else {
 	    if (ts->use_irq)
@@ -3013,7 +3147,7 @@ static void goodix_ts_resume(struct goodix_ts_data *ts)
     
     GTP_DEBUG_FUNC();
     
-    GTP_DEBUG("System resume.");
+    GTP_INFO("System resume.");
 //+++
 	if(ts->enter_update)
 	{
@@ -3030,9 +3164,11 @@ static void goodix_ts_resume(struct goodix_ts_data *ts)
 /*ZTEMT END*/
 
 #if GTP_GESTURE_WAKEUP
-	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
-	    doze_status = DOZE_DISABLED;
+//	if (ts->wakeup_gesture == 1) {	//add by luochangyang 2014/04/30
+	if(DOZE_DISABLED != doze_status) {
+	    doze_status = DOZE_DISABLING;
 	}
+//	}
 #endif
 
     if (ret < 0)
@@ -3079,11 +3215,11 @@ static int fb_notifier_callback(struct notifier_block *self,
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK) {
 			goodix_ts_resume(ts);
-			GTP_INFO("ztemt %s: Wake!", __func__);
+			GTP_INFO("ztemt %s: Wake!\n", __func__);
 		}
 		else if (*blank == FB_BLANK_POWERDOWN) {
 			goodix_ts_suspend(ts);
-			GTP_INFO("ztemt %s: Sleep!", __func__);
+			GTP_INFO("ztemt %s: Sleep!\n", __func__);
 		}
 	}
 
